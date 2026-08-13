@@ -181,5 +181,6 @@ async def create_response(
 
 # Health check del servicio
 @app.get("/health")
+@app.head("/health")
 def health():
     return {"status": "ok"}

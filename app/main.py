@@ -8,7 +8,7 @@ from typing import Literal, Union, List
 
 from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException, Request, Header
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
 from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
@@ -80,6 +80,7 @@ class OutputTextContent(BaseModel):
 class OutputItem(BaseModel):
     type: Literal["message"] = "message"
     role: Literal["assistant"] = "assistant"
+    status: Literal["completed"] = "completed"
     content: list[OutputTextContent]
 
 
@@ -166,7 +167,12 @@ async def create_response(
         model=body.model,
         created_at=int(time.time()),
         output=[
-            OutputItem(content=[OutputTextContent(text=answer_text)]),
+            OutputItem(
+                type="message",
+                role="assistant",
+                status="completed",
+                content=[OutputTextContent(text=answer_text)],
+            ),
         ],
     )
 

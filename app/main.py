@@ -4,11 +4,11 @@ import time
 import uuid
 import logging
 from contextlib import asynccontextmanager
-from typing import Literal
+from typing import Literal, Union, List
 
 from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException, Request, Header
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
@@ -52,15 +52,24 @@ app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 SERVICE_API_KEY = os.environ.get("SERVICE_API_KEY")
 
 
-# Schemas para la especificacion Open Responses
+# Schemas para la especificacion Open Responses adaptada
+class ContentPart(BaseModel):
+    type: str = "input_text"
+    text: str = ""
+
+
 class InputMessage(BaseModel):
     role: Literal["user", "assistant"]
-    content: str
+    type: str = "message"
+    content: Union[str, List[ContentPart]]
 
 
 class ResponsesRequest(BaseModel):
     model: str = "cv-agent"
-    input: str | list[InputMessage]
+    instructions: str | None = None
+    input: Union[str, List[InputMessage]]
+    stream: bool = False
+    store: bool = False
 
 
 class OutputTextContent(BaseModel):
@@ -95,6 +104,14 @@ def verify_api_key(authorization: str | None) -> None:
         raise HTTPException(status_code=401, detail="API key invalida")
 
 
+def _extract_text_from_content(content: Union[str, List[ContentPart]]) -> str:
+    if isinstance(content, str):
+        return content
+    if isinstance(content, list):
+        return " ".join(part.text for part in content if hasattr(part, "text"))
+    return ""
+
+
 # Endpoint de respuestas de la API
 @app.post("/v1/responses", response_model=ResponsesResponse)
 @limiter.limit("20/minute")
@@ -125,11 +142,12 @@ async def create_response(
 
         for msg in trimmed_input[:-1]:
             role = "model" if msg.role == "assistant" else "user"
-            agent.history.append(types.Content(role=role, parts=[types.Part(text=msg.content)]))
+            msg_text = _extract_text_from_content(msg.content)
+            agent.history.append(types.Content(role=role, parts=[types.Part(text=msg_text)]))
 
         if trimmed_input[-1].role != "user":
             raise HTTPException(status_code=400, detail="El ultimo mensaje de 'input' debe ser del usuario")
-        user_message = trimmed_input[-1].content
+        user_message = _extract_text_from_content(trimmed_input[-1].content)
 
     if len(user_message) > MAX_MESSAGE_LENGTH:
         raise HTTPException(status_code=400, detail=f"Mensaje demasiado largo (máx {MAX_MESSAGE_LENGTH} caracteres)")

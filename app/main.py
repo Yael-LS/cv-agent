@@ -89,6 +89,7 @@ class ResponsesResponse(BaseModel):
     object: Literal["response"] = "response"
     model: str
     created_at: int
+    status: Literal["completed"] = "completed"
     output: list[OutputItem]
 
 
@@ -166,6 +167,7 @@ async def create_response(
         id=f"resp_{uuid.uuid4().hex}",
         model=body.model,
         created_at=int(time.time()),
+        status="completed",
         output=[
             OutputItem(
                 type="message",

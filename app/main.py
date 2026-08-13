@@ -98,12 +98,20 @@ def verify_api_key(authorization: str | None) -> None:
 # Endpoint de respuestas de la API
 @app.post("/v1/responses", response_model=ResponsesResponse)
 @limiter.limit("20/minute")
-def create_response(
+async def create_response(
     request: Request,
-    body: ResponsesRequest,
     authorization: str | None = Header(default=None),
 ):
     verify_api_key(authorization)
+
+    raw_body = await request.body()
+    logger.info(f"=== PAYLOAD RECIBIDO ===\n{raw_body.decode('utf-8', errors='ignore')}\n========================")
+
+    try:
+        body = ResponsesRequest.model_validate_json(raw_body)
+    except Exception as e:
+        logger.error(f"Error de validacion Pydantic: {e}")
+        raise HTTPException(status_code=422, detail=str(e))
 
     agent = CVAgent()
 
